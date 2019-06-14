@@ -1,0 +1,11 @@
+{
+  "autoload": {
+    "psr-4": {
+      "": "src/"
+    }
+  },
+  "require": {
+    "symfony/console": "^4.3",
+    "ext-json": "*"
+  }
+}
