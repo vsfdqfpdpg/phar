@@ -23,28 +23,16 @@ class ZipPhpArchive {
 		if ( $this->isWin() ) {
 			$this->createBatFile();
 			$this->createBashFile();
-		} elseif ( $this->isLinux() ) {
-			$this->moveFileToBin();
 		}
+		$this->moveFileToBin();
 
 	}
 
 	private function getComposerPath() {
 		if ( $this->isWin() ) {
-			$environment_path = explode( ';', getenv( 'PATH' ) );
-			$filter           = array_filter( $environment_path, function ( $path ) {
-				return stripos( $path, 'composer' ) !== false;
-			} );
-			if ( count( $filter ) ) {
-				$this->output->writeln( '<info>Composer found.</info>' );
-
-				return array_shift( $filter );
-			} else {
-				$this->output->writeln( '<error>Do not found composer in environment path.</error>' );
-				exit( 1 );
-			}
-		} elseif ( $this->isLinux() ) {
-			return '/usr/local/bin';
+			return $this->filterComposerPath( ';' );
+		} else {
+			return $this->filterComposerPath( ':' );
 		}
 	}
 
@@ -91,14 +79,22 @@ class ZipPhpArchive {
 
 	private function createPharFile() {
 		$this->output->writeln( '<info>Begin to create ' . $this->name . '.phar file.</info>' );
-		$phar = new Phar( $this->bin . $this->name . '.phar' );
+		$temp_phar = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $this->name . '.phar';
+		$phar      = new Phar( $temp_phar );
 		$phar->startBuffering();
 		$default_stub = $phar->createDefaultStub( $this->stub );
 		$phar->buildFromDirectory( getcwd() . DIRECTORY_SEPARATOR );
 		$stub = "#!/usr/bin/env php \n" . $default_stub;
 		$phar->setStub( $stub );
 		$phar->stopBuffering();
-		$phar->compressFiles( Phar::GZ );
+		try {
+			$phar->compressFiles( Phar::GZ );
+		} catch ( Exception $exception ) {
+			if ( ! file_exists( $temp_phar ) ) {
+				$this->output->writeln( '<error>' . $exception->getMessage() . ' ' . $temp_phar . '</error>' );
+				exit( 1 );
+			}
+		}
 	}
 
 	private function createBatFile() {
@@ -132,7 +128,10 @@ STR;
 	 */
 	private function unlink( $filename ) {
 		if ( file_exists( $filename ) && is_file( $filename ) ) {
-			unlink( $filename );
+			if ( ! @unlink( $filename ) ) {
+				$this->output->writeln( '<error>Unable to delete ' . $filename . '. Please run as administrator</error>' );
+				exit( 1 );
+			}
 		}
 	}
 
@@ -140,7 +139,7 @@ STR;
 	 * @return bool
 	 */
 	private function isWin() {
-		return stripos( PHP_OS, 'WIN' ) !== false;
+		return strcasecmp( substr( PHP_OS, 0, 3 ), 'WIN' ) == 0;
 	}
 
 	/**
@@ -160,8 +159,36 @@ STR;
 	}
 
 	private function moveFileToBin() {
-		rename( $this->bin . $this->name . '.phar', $this->bin . $this->name );
-		chmod( $this->bin . $this->name, 0755 );
+		$dest = $this->isWin() ? $this->bin . $this->name . '.phar' : $this->bin . $this->name;
+		if ( @rename( sys_get_temp_dir() . DIRECTORY_SEPARATOR . $this->name . '.phar', $dest ) ) {
+			chmod( $this->bin . $this->name, 0755 );
+		} else {
+			$this->output->writeln( '<error>Unable to install ' . $this->bin . $this->name . '.phar. Please run as administrator</error>' );
+			exit( 1 );
+		}
+	}
+
+	/**
+	 * @param $delimiter
+	 *
+	 * @return string
+	 */
+	private function filterComposerPath( $delimiter ) {
+		$environment_path = explode( $delimiter, getenv( 'PATH' ) );
+		$filter           = array_filter( $environment_path, function ( $path ) {
+			$composer_filename = $path . DIRECTORY_SEPARATOR . 'composer';
+
+			return file_exists( $composer_filename ) && is_file( $composer_filename );
+		} );
+		if ( count( $filter ) ) {
+			$this->output->writeln( '<info>Composer found.</info>' );
+
+			return array_shift( $filter );
+		} else {
+			$this->output->writeln( '<error>Do not found composer in environment path.</error>' );
+			exit( 1 );
+		}
+
 	}
 
 }

@@ -1,13 +1,14 @@
 ## PHP settings
- Open your php.ini file and change `#phar.readonly` to `phar.readonly = Off`  
- You can run `php --ini` to locate your php.ini file.
+ Open your php.ini file and change `#phar.readonly` to `phar.readonly = Off`     
+ You can run `php --ini` to locate your php.ini file.   
+ You need administrator permission to run this project correctly.   
 ## Build 
 ```
 git clone https://github.com/vsfdqfpdpg/phar.git
 cd phar
 composer install
-php index.php archive
-phar
+sudo php index.php archive
+sudo phar
 ``` 
 If everything run successfully, You will see output below.
 ![success](./success.png)
